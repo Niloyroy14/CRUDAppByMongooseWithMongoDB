@@ -2,11 +2,39 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const todoSchema = require('../schemas/todoSchema.js');
+const userSchema = require('../schemas/userSchema.js');
+const checkLogin = require('../middlewares/checkLogin.js');
 
 const Todo = new mongoose.model("Todo", todoSchema);
+const User = new mongoose.model("User", userSchema);
+
+//Get All Todos only signin user after relation 
+router.get('/getUserWithRelation', checkLogin, async (req, res) => {
+    try {
+        let data = await Todo.find()
+            .populate("user", "name username -_id")  // user define schema for populate
+            .select({
+                _id: 0,
+                date: 0,
+                __v: 0
+            })
+            .exec();
+        if (data) {
+            res.status(200).json({
+                result: data,
+                message: 'Success',
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            error: 'There waas a Server side error',
+        });
+    }
+});
+
 
 //Get All Todos 
-router.get('/', async (req, res) => {
+router.get('/', checkLogin, async (req, res) => {
     try {
         let data = await Todo.find();
         if (data) {
@@ -125,6 +153,58 @@ router.post('/', async (req, res) => {
         if (data) {
             res.status(200).json({
                 message: 'Todo Was Inserted Successfully',
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            error: 'There waas a Server side error',
+        });
+    }
+
+});
+
+
+//POST Todo relation with user (one to one) insert user id into todo collection
+router.post('/all/withUser', checkLogin, async (req, res) => {
+    const newTodo = new Todo({
+        ...req.body,
+        user: req.userId
+    });
+    try {
+        let data = await newTodo.save();
+        if (data) {
+            res.status(200).json({
+                message: 'Todo With User Id Was Inserted Successfully',
+            });
+        }
+    } catch (err) {
+        res.status(500).json({
+            error: 'There waas a Server side error',
+        });
+    }
+
+});
+
+
+
+//POST Todo relation with user (one to many) insert todo id into user collection
+router.post('/all/withUserTodo', checkLogin, async (req, res) => {
+    const newTodo = new Todo({
+        ...req.body,
+        user: req.userId
+    });
+    try {
+        let todo = await newTodo.save();
+        let userUpdate = await User.updateOne({
+            _id: req.userId
+        }, {
+            $push: {
+                todos: todo._id
+            }
+        });
+        if (todo && userUpdate) {
+            res.status(200).json({
+                message: 'Todo With User Id And Also Update Todo Id in Todo Was Inserted Successfully',
             });
         }
     } catch (err) {
